@@ -9,4 +9,6 @@ There is one subfolder for each case:
 - Case 4 - DTU (photon counting with machine learning)
 - Case 5 - Science Melting Pot (science communication)
 
+The list of groups can be found in [Groups.md](/Groups.md).
+
 

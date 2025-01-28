@@ -2,6 +2,8 @@ This folder contains the data and scripts needed to build a classifier for photo
 
 **"PSNSPD_data.py" is the main script needed for generating training data.**
 
+**"QST-Hack-2025 - DTU Physics - Case - Photon Counting.pdf" contains the problem description incluing the target performance of the classifier**
+
 The other files are there to make this script work. Understanding them is not necessary for building the classifier.
 - The "8-pixel x photon.csv" files define single and double photon detections, which can be used as reference to ideal photon detection.
 - "psnspd.py" defines a class for generating signals with noise from "noise.py" and randomised shifts for each photon. 

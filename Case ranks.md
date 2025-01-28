@@ -1,6 +1,6 @@
 ## Case preferences for each group.
 
-Cases should be ranked with numbers 1 to 5, where 1=highest preference, 5=lowesr preference.
+Cases should be ranked with numbers 1 to 5, where 1=highest preference, 5=lowest preference.
 
 
 | Group \ Case  | 1 | 2 | 3 | 4 | 5 |

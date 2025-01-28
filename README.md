@@ -4,7 +4,7 @@ This repository contains material for each of the cases that participants will w
 
 There is one subfolder for each case:
 - Case 1 - Kvantify (portfolio optimisation)
-- Case 2 - KPMG ()
+- Case 2 - KPMG (infrastructure optimisation)
 - Case 3 - Qpurpose (climate simulation)
 - Case 4 - DTU (photon counting with machine learning)
 - Case 5 - Science Melting Pot (science communication)

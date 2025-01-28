@@ -8,7 +8,7 @@
 
 **Group 3:** Jacobo, Pranav, Michele, Michael
 
-**Group 4:** Ashish, Mar, Shadnan. 
+**Group 4:** Aleksandar, Oliver, Ameer.
 
 **Group 5:** Rohan, Asger, Javier. 
 
@@ -18,8 +18,8 @@
 
 **Group 8:** Asmus, Ernest, Christian. 
 
-**Group 9:** Emil, Vivian, Thomas.
+**Group 9:** Emil, Vivian, Thomas, Shadnan.
 
 **Group 10:** David, Xiaotian, Hao, 
 
-**Group 11:** Aleksandar, Oliver, Ameer.
+

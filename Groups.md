@@ -2,24 +2,24 @@
 
 *The groups have been formed based on the prior experience you have indicated, mixing competences to balance the groups.*
 
-**Group 1:** João, David, Xiaotian, Jacobo.
+**Group 1:** Lakshmi, Pau, Rayan, Seguiva
 
-**Group 2:** Pranav, Michele, Michael, Bjarne.
+**Group 2:** Sihan, Jiuyi, Mikkel, Pol.
 
-**Group 3:** Ashish, Mar, Md Shadnan.
+**Group 3:** Jacobo, Pranav, Michele, Michael
 
-**Group 4:** Rohan, Asger, Javier.
+**Group 4:** Ashish, Mar, Shadnan. 
 
-**Group 5:** Tobias, Afonso, Adrian.
+**Group 5:** Rohan, Asger, Javier. 
 
-**Group 6:** Lakshmi, Sophia, Rogan.
+**Group 6:** Tobias, Afonso, Adrian. 
 
-**Group 7:** Asmus, Ernest, Christian.
+**Group 7:** João, Sophia, Bjarne
 
-**Group 8:** Emil, Vivian, Thomas.
+**Group 8:** Asmus, Ernest, Christian. 
 
-**Group 9:** Pau, Hao, Sugeiva.
+**Group 9:** Emil, Vivian, Thomas.
 
-**Group 10:** Aleksandar, Oliver, Ameer.
+**Group 10:** David, Xiaotian, Hao, 
 
-**Group 11:** Sihan, Jiuyi, Mikkel, Pol.
+**Group 11:** Aleksandar, Oliver, Ameer.

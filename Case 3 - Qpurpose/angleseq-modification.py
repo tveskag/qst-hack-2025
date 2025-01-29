@@ -39,7 +39,7 @@ def QSVT_cosinus(degree_cutoff: int, max_scale: float, M_step: int):
         poly, method="sym_qsp", chebyshev_basis=True
     )
 
-    return QSVT_format(angles)
+    return QSVT_format(angles), poly
 
 
 def QSVT_sinus(degree_cutoff: int, max_scale: float, M_step: int):
@@ -53,4 +53,14 @@ def QSVT_sinus(degree_cutoff: int, max_scale: float, M_step: int):
         poly, method="sym_qsp", chebyshev_basis=True
     )
 
-    return QSVT_format(angles)
+    return QSVT_format(angles), poly
+
+
+M_step = 10
+max_scale = 0.7
+true_func = lambda x: max_scale * np.sin(M_step * x)
+
+ang, poly = QSVT_sinus(20, max_scale, M_step)
+
+
+response.PlotQSPResponse(ang, pcoefs=poly, target=true_func, sym_qsp=True, simul_error_plot=True)

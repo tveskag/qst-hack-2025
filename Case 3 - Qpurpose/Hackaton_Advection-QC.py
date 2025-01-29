@@ -33,18 +33,18 @@ def Advection_prep(n,dt,c):
     d = 4                               # The domain is fixed to be [0,4]
     dx = d/2**n                
     #a = 1-2*dt*nu/dx**2
-    b = 1-dt*c/dx
+    b = dt*c/dx
     if b>0:
         suptheta = np.arccos(np.sqrt(b) - 1)   # The rotation angle needed to prepare a using an RY gate  
         diatheta = 0 #np.arccos(np.sqrt(a)) + np.pi   # The rotation angle needed to prepare a using an RY gate  
-        subtheta = np.arccos(-b) + np.pi   # The rotation angle needed to prepare a using an RY gate  
+        subtheta = -np.arccos(np.sqrt(b) - 1)   # The rotation angle needed to prepare a using an RY gate  
     else:
         print('The chosen values n,dt,c are not admissible. Arrange that 1>c*dt/dx')
         exit(1)
 
-    sup = RYGate(-suptheta).control(2, ctrl_state='00')
-    dia = RYGate(diatheta).control(2, ctrl_state='01')
-    sub = RYGate(subtheta).control(2, ctrl_state='10')
+    sup = RYGate(np.pi/2).control(2, ctrl_state='00')
+    dia = RYGate(0).control(2, ctrl_state='01')
+    sub = RYGate(-np.pi/2).control(2, ctrl_state='10')
         
     #qc.ry(suptheta, last-1)
     #qc.cx(1, last-1)           
@@ -270,18 +270,17 @@ def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
     U = Block_encoding(n,dt,c)                       # Block encoding circuit 
     U.draw(output='latex', filename='circuit.pdf')
      
-    u = np.zeros(2**n).astype(complex)
+    u = np.zeros(2**n)
     for j in range(2**n):
         b = (n+2)*'0' + f"{j:0{n}b}"#[::-1]
-        print(b)
-        for i in range(2**n):
-            v = Statevector.from_label(b).evolve(U)
-            index = i*(2**(n+2))
-            u[i] = np.round(v[index], decimals=3)
-        print(np.real(u))
-        
-        
-    
+        state = Statevector.from_label(b).evolve(U).reverse_qargs()
+        for i in range(0,2**n):
+            index = (i+1)*2**(n+1) + (j+1)*2**(n+1) - 1
+            u[i] = np.round(np.real(state[index]), decimals=3)
+            #print(index)
+        print(u)
+        stateM = np.round(np.real(state), decimals=3)
+        #print(stateM)
 
-Compare_plots(deg = 10,n = 6,dt = 0.05,c = 0.02, shots = 10**6)
-Visualize_matrix(n = 3, dt = 0.05, c = 0.8)
+#Compare_plots(deg = 10,n = 6,dt = 0.05,c = 0.02, shots = 10**6)
+Visualize_matrix(n = 2, dt = 0.05, c = 0.8)

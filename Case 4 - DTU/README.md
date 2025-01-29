@@ -17,7 +17,7 @@ For Shell (on Linux): "python3 -m venv venv && pip3 install -r requirements.txt"
 If no input is given, the default is 100 signals.**
 
 # 2025-01-29 update
-The computational complexity of the detector algorithm, must be within the capabilities of the AMD ZU9EG fpga, which is capable of 630 GMAC (giga multiply-and-accumulate) operations, where 1 MAC is one 24-bit multiplication plus one 24-bit addition. The 630 GMAC is calculated as 2520 dsp-engines * 1 MAC/dsp-engine * 250 MHz = 630 GMAC.
+The computational complexity of the detector algorithm, must be within the capabilities of the AMD ZU9EG fpga, which is capable of 630 GMAC (giga multiply-and-accumulate) operations, where 1 MAC is one 24-bit multiplication plus one 24-bit addition. It is desirable that the implementation is as small as possible, i.e. having computational complexity much below 630 GMAC.
 
 In the final implementation the algorithm will run on a AMD ZU9EG fpga, which receives 12-bit samples from a 1 Gsamp/s ADC (analog-to-digital converter).
 ![PXL_20250129_084637736](https://github.com/user-attachments/assets/087d6a9b-52a3-4f43-9b78-37dbcd2a2aa9)

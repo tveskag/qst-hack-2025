@@ -16,7 +16,7 @@ For Shell (on Linux): "python3 -m venv venv && pip3 install -r requirements.txt"
 **To generate N signals, run the script like this: "python3 PSNSPD_data.py --signal_no N".\
 If no input is given, the default is 100 signals.**
 
-# 2025-01-29 update from Axel Bregnsbo:
+# 2025-01-29 update from Axel Bregnsbo
 The computational complexity of the detector algorithm, must be within the capabilities of the AMD ZU9EG fpga, which is capable of 630 GMAC (giga multiply-and-accumulate) operations, where 1 MAC is one 24-bit multiplication plus one 24-bit addition. The 630 GMAC is calculated as 2520 dsp-engines * 1 MAC/dsp-engine * 250 MHz = 630 GMAC.
 
 In the final implementation the algorithm will run on a AMD ZU9EG fpga, which receives 12-bit samples from a 1 Gsamp/s ADC (analog-to-digital converter).

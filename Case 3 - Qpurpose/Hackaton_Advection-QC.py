@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit.circuit.library import QFT, RYGate, RZGate, MCXGate, ModularAdderGate
 from qiskit.visualization import plot_histogram
-from qiskit.quantum_info import Statevector
+from qiskit.quantum_info import Statevector, partial_trace
 from qiskit_aer import AerSimulator
 
 # The block encoding is built from three special gates: shift, a special 2 qubit gate prep and a modular adder
@@ -77,9 +77,9 @@ def Block_encoding(n,dt,c):
     for j in range(1, n):
         qc.h(qr1[j])
         
-    qc.append(sup,qr2[1:3]+anc[0:1])
-    qc.append(dia,qr2[1:3]+anc[0:1])
-    qc.append(sub,qr2[1:3]+anc[0:1])
+    qc.append(sup,qr2[0:2]+anc[0:1])
+    qc.append(dia,qr2[0:2]+anc[0:1])
+    qc.append(sub,qr2[0:2]+anc[0:1])
     qc.append(S.inverse(),qr1[:])
     qc.append(adder,qr2[:]+qr1[:])
     
@@ -90,9 +90,9 @@ def Block_encoding(n,dt,c):
     
     qc.append(adder.inverse(),qr2[:]+qr1[:])
     qc.append(S,qr1[:])
-    qc.append(sub.inverse(),qr2[1:3]+anc[0:1])
-    qc.append(dia.inverse(),qr2[1:3]+anc[0:1])
-    qc.append(sup.inverse(),qr2[1:3]+anc[0:1])
+    qc.append(sub.inverse(),qr2[0:2]+anc[0:1])
+    qc.append(dia.inverse(),qr2[0:2]+anc[0:1])
+    qc.append(sup.inverse(),qr2[0:2]+anc[0:1])
     
     for j in range(1, n):
         qc.h(qr1[j])
@@ -169,8 +169,6 @@ def Diffusion_QSVT(deg,n,dt,c,shots = 10**6,show_gate_count = False):
     qc.prepare_state(Statevector(y),qr2)
     
     U = Block_encoding(n,dt,c)                       # Block encoding circuit 
-    
-    #U.draw(output='latex', filename='circuit.pdf')
     
     Phi = extract_angle_seq()[int(deg/5)-1]           # Extracting the angle sequence  
     
@@ -267,4 +265,23 @@ def Compare_plots(deg = 10,n = 5,dt = 0.1,c = 0.02,shots = 10**6):
     plt.legend(['Classical T=0','Classical T='+str(T),'Quantum T='+str(T)])
     plt.show()
 
+def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
+ 
+    U = Block_encoding(n,dt,c)                       # Block encoding circuit 
+    U.draw(output='latex', filename='circuit.pdf')
+     
+    u = np.zeros(2**n).astype(complex)
+    for j in range(2**n):
+        b = (n+2)*'0' + f"{j:0{n}b}"#[::-1]
+        print(b)
+        for i in range(2**n):
+            v = Statevector.from_label(b).evolve(U)
+            index = i*(2**(n+2))
+            u[i] = np.round(v[index], decimals=3)
+        print(np.real(u))
+        
+        
+    
+
 Compare_plots(deg = 10,n = 6,dt = 0.05,c = 0.02, shots = 10**6)
+Visualize_matrix(n = 3, dt = 0.05, c = 0.8)

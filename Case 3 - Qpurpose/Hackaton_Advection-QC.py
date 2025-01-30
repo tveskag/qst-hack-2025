@@ -90,19 +90,20 @@ def Advection_prep(n, dt, c):
     """
     d = 4  # The domain is fixed to be [0,4]
     dx = d / 2**n
-    # a = 1-2*dt*nu/dx**2
+    nu = 0.02
+    a = 1-2*dt*nu/dx**2
     b = dt * c / dx
     if b > 0:
-        suptheta = np.arccos(np.sqrt(b) - 1)  # The rotation angle needed to prepare a using an RY gate
-        diatheta = 0  # np.arccos(np.sqrt(a)) + np.pi   # The rotation angle needed to prepare a using an RY gate
-        subtheta = np.arccos(-b) + np.pi  # The rotation angle needed to prepare a using an RY gate
+        suptheta = np.arccos(np.sqrt(b) - 1) + np.pi  # The rotation angle needed to prepare a using an RY gate
+        diatheta = np.arccos(np.sqrt(a)) + np.pi   # The rotation angle needed to prepare a using an RY gate
+        subtheta = np.arccos(b) + np.pi  # The rotation angle needed to prepare a using an RY gate
     else:
         print("The chosen values n,dt,c are not admissible. Arrange that 1>c*dt/dx")
         exit(1)
 
-    sup = RYGate(-suptheta).control(2, ctrl_state="00")
     dia = RYGate(0).control(2, ctrl_state="01")
-    sub = RYGate(subtheta).control(2, ctrl_state="10")
+    sup = RYGate(suptheta).control(2, ctrl_state="00")
+    sub = RYGate(-subtheta).control(2, ctrl_state="10")
 
     # qc.ry(suptheta, last-1)
     # qc.cx(1, last-1)
@@ -201,9 +202,9 @@ def Block_encoding(n, dt, c):
     for j in range(1, n):
         qc.h(qr1[j])
 
-    qc.append(sup, qr1[0:2] + anc[0:1])
-    qc.append(dia, qr1[0:2] + anc[0:1])
-    qc.append(sub, qr1[0:2] + anc[0:1])
+    qc.append(sup, qr2[1:3] + anc[0:1])
+    qc.append(dia, qr2[1:3] + anc[0:1])
+    qc.append(sub, qr2[1:3] + anc[0:1])
     qc.append(S.inverse(), qr1[:])
     qc.append(adder, qr2[:] + qr1[:])
 
@@ -214,9 +215,9 @@ def Block_encoding(n, dt, c):
 
     qc.append(adder.inverse(), qr2[:] + qr1[:])
     qc.append(S, qr1[:])
-    qc.append(sub.inverse(), qr1[0:2] + anc[0:1])
-    qc.append(dia.inverse(), qr1[0:2] + anc[0:1])
-    qc.append(sup.inverse(), qr1[0:2] + anc[0:1])
+    qc.append(sub.inverse(), qr2[1:3] + anc[0:1])
+    qc.append(dia.inverse(), qr2[1:3] + anc[0:1])
+    qc.append(sup.inverse(), qr2[1:3] + anc[0:1])
 
     for j in range(1, n):
         qc.h(qr1[j])
@@ -302,8 +303,8 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
 
     # TODO Set maxscale such that the output is rescaled
     # TODO
-    (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.1, M_step=deg)  # Extracting the angle sequence
-    (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.1, M_step=deg)  # Extracting the angle sequence
+    (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.2, M_step=deg)  # Extracting the angle sequence
+    (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.2, M_step=deg)  # Extracting the angle sequence
 
     # Applying the QSVT circuit
     qc.h(qra[:])
@@ -335,7 +336,7 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     qc.p(-np.pi / 2, qra[0])
     qc.h(qra[:])
     
-    qc.draw(output='latex', filename='circuit.pdf')
+    #qc.draw(output='latex', filename='circuit.pdf')
 
     # Measurements
     qc.measure(qra, cra)
@@ -416,26 +417,26 @@ def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
     x, z = Advection_QSVT(deg, 10, n, dt, c, shots=shots, show_gate_count=True)
     T = deg * dt
     plt.plot(x, y, x, w, x, z)
-    # plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
-    plt.legend(["Classical T=0", "Classical T=" + str(T)])
+    plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
+    #plt.legend(["Classical T=0", "Classical T=" + str(T)])
     plt.show()
 
 def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
  
     U = Block_encoding(n,dt,c)                       # Block encoding circuit 
-    U.draw(output='latex', filename='circuit.pdf')
+    #U.draw(output='latex', filename='circuit.pdf')
      
-    u = np.zeros(2**n)
+    u = np.zeros(2**n).astype(complex)
     for j in range(2**n):
         b = (n+2)*'0' + f"{j:0{n}b}"#[::-1]
         state = Statevector.from_label(b).evolve(U).reverse_qargs()
         for i in range(0,2**n):
-            index = (i+1)*2**(n+1) + (j+1)*2**(n+1) - 1
-            u[i] = np.round(np.real(state[index]), decimals=3)
+            index = i*2**(n+2)
+            u[i] = np.round(state[index], decimals=3)
             #print(index)
         print(u)
         stateM = np.round(np.real(state), decimals=3)
         #print(stateM)
 
-#Compare_plots(deg = 10,n = 6,dt = 0.05,c = 0.02, shots = 10**6)
-Visualize_matrix(n = 2, dt = 0.05, c = 0.8)
+#Compare_plots(deg = 10, n = 6, dt = 0.05, c = 0.6, shots = 10**6)
+Visualize_matrix(n = 3, dt = 0.05, c = 0.8)

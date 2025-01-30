@@ -65,7 +65,7 @@ def QSVT_sinus(degree_cutoff: int, max_scale: float, M_step: int):
     return QSVT_format(angles), poly
 
 
-def Shift_gate(n):
+def Shift_gate(n, ctrl_state="1"):
     """
     n : number of qubits.
 
@@ -74,45 +74,9 @@ def Shift_gate(n):
     """
     qc = QuantumCircuit(n, name="Shift")
     for j in range(n - 1):
-        qc.mcx([k for k in range(n - 1 - j)], n - 1 - j)  # Using multi controlled NOT gates
+        qc.mcx([k for k in range(n - 1 - j)], n - 1 - j, ctrl_state=(n - 1 - j)*ctrl_state)  # Using multi controlled NOT gates
     qc.x(0)
     return qc.to_gate()
-
-
-def Advection_prep(n, dt, c):
-    """
-    n: number of spatial qubits. N = 2**n is the number of spatial grid points.
-    dt: time step.
-    nu: diffusion coefficient.
-
-    Returns a 2 qubit gate state preparation gate implementing
-    |0> --> sqrt(nu*dt/dx**2)|0> + sqrt(1-2*nu*dt/dx**2)|1> + sqrt(nu*dt/dx**2) |2>
-    """
-    d = 4  # The domain is fixed to be [0,4]
-    dx = d / 2**n
-    nu = 0.02
-    a = 1-2*dt*nu/dx**2
-    b = dt * c / dx
-    if b > 0:
-        suptheta = np.arccos(np.sqrt(b) - 1) + np.pi  # The rotation angle needed to prepare a using an RY gate
-        diatheta = np.arccos(np.sqrt(a)) + np.pi   # The rotation angle needed to prepare a using an RY gate
-        subtheta = np.arccos(b) + np.pi  # The rotation angle needed to prepare a using an RY gate
-    else:
-        print("The chosen values n,dt,c are not admissible. Arrange that 1>c*dt/dx")
-        exit(1)
-
-    dia = RYGate(0).control(2, ctrl_state="01")
-    sup = RYGate(suptheta).control(2, ctrl_state="00")
-    sub = RYGate(-subtheta).control(2, ctrl_state="10")
-
-    # qc.ry(suptheta, last-1)
-    # qc.cx(1, last-1)
-    # qc.ry(subtheta, last-1)
-    # qc.cx(2, last-1)
-    # qc.ry(suptheta, last-1)
-    # qc.cx(1, last-1)
-    return [sup, dia, sub]
-
 
 #######
 
@@ -179,6 +143,64 @@ def advection_block_encoding(n, dt, c):
 
     return qc
 
+
+def Advection_prep(n, dt, c):
+    """
+    n: number of spatial qubits. N = 2**n is the number of spatial grid points.
+    dt: time step.
+    nu: diffusion coefficient.
+
+    Returns a 2 qubit gate state preparation gate implementing
+    |0> --> sqrt(nu*dt/dx**2)|0> + sqrt(1-2*nu*dt/dx**2)|1> + sqrt(nu*dt/dx**2) |2>
+    """
+    d = 4  # The domain is fixed to be [0,4]
+    dx = d / 2**n
+    nu = 0.02
+    a = 1-2*dt*nu/dx**2
+    b = dt * c / dx
+    if b > 0:
+        suptheta = 2*np.arccos(-b)  # The rotation angle needed to prepare a using an RY gate
+        diatheta = 2*np.arccos(a - 1)   # The rotation angle needed to prepare a using an RY gate
+        subtheta = 2*np.arccos(b)  # The rotation angle needed to prepare a using an RY gate
+    else:
+        print("The chosen values n,dt,c are not admissible. Arrange that 1>c*dt/dx")
+        exit(1)
+
+    dia = RYGate(0).control(2, ctrl_state="00")
+    sup = RYGate(suptheta).control(2, ctrl_state="01")
+    sub = RYGate(subtheta).control(2, ctrl_state="10")
+
+    # qc.ry(suptheta, last-1)
+    # qc.cx(1, last-1)
+    # qc.ry(subtheta, last-1)
+    # qc.cx(2, last-1)
+    # qc.ry(suptheta, last-1)
+    # qc.cx(1, last-1)
+    return [sup, dia, sub]
+
+def Another_block_encoding(n, dt, c):
+    anc = QuantumRegister(3, name="anc")
+    qr1 = QuantumRegister(n, name="Q1")
+    qc = QuantumCircuit(anc, qr1, name="Block-2")
+    
+    [sup, dia, sub] = Advection_prep(n, dt, c)
+    
+    qc.h(anc[1:])
+    qc.append(sup, anc[1:] + anc[0:1])
+    qc.append(dia, anc[1:] + anc[0:1])
+    qc.append(sub, anc[1:] + anc[0:1])
+    
+    L = Shift_gate(n, ctrl_state="1").control(1)
+    R = Shift_gate(n, ctrl_state="0").control(1)
+    
+    qc.append(L, anc[2:3] + qr1[:])
+    qc.append(R, anc[1:2] + qr1[:])
+    
+    qc.h(anc[1:])
+
+    return qc
+    
+
 def Block_encoding(n, dt, c):
     """
     n : number of spatial qubits
@@ -202,9 +224,9 @@ def Block_encoding(n, dt, c):
     for j in range(1, n):
         qc.h(qr1[j])
 
-    qc.append(sup, qr2[1:3] + anc[0:1])
-    qc.append(dia, qr2[1:3] + anc[0:1])
-    qc.append(sub, qr2[1:3] + anc[0:1])
+    qc.append(sup, qr2[0:2] + anc[0:1])
+    qc.append(dia, qr2[0:2] + anc[0:1])
+    qc.append(sub, qr2[0:2] + anc[0:1])
     qc.append(S.inverse(), qr1[:])
     qc.append(adder, qr2[:] + qr1[:])
 
@@ -215,9 +237,9 @@ def Block_encoding(n, dt, c):
 
     qc.append(adder.inverse(), qr2[:] + qr1[:])
     qc.append(S, qr1[:])
-    qc.append(sub.inverse(), qr2[1:3] + anc[0:1])
-    qc.append(dia.inverse(), qr2[1:3] + anc[0:1])
-    qc.append(sup.inverse(), qr2[1:3] + anc[0:1])
+    qc.append(sub.inverse(), qr2[0:2] + anc[0:1])
+    qc.append(dia.inverse(), qr2[0:2] + anc[0:1])
+    qc.append(sup.inverse(), qr2[0:2] + anc[0:1])
 
     for j in range(1, n):
         qc.h(qr1[j])
@@ -275,17 +297,17 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     Returns x,z the spatial grid values and the simulated y values in z.
     """
     # Setting up the circuit
-    qra = QuantumRegister(2)  # Ancilla register on 1 qubit used in QSVT
-    qra2 = QuantumRegister(2)  # Ancilla register on 1 qubit used in Block_encoding
+    qraS = QuantumRegister(2)  # Ancilla register on 1 qubit used in QSVT
+    qraB = QuantumRegister(3)  # Ancilla register on 1 qubit used in Block_encoding
     qr1 = QuantumRegister(n)  # qr1 and qr2 are the same as in Block_encoding
-    qr2 = QuantumRegister(n)
+    #qr2 = QuantumRegister(n)
 
-    cra = ClassicalRegister(2)
-    cra2 = ClassicalRegister(2)
+    craS = ClassicalRegister(2)
+    craB = ClassicalRegister(3)
     cr1 = ClassicalRegister(n)
-    cr2 = ClassicalRegister(n)
+    #cr2 = ClassicalRegister(n)
 
-    qc = QuantumCircuit(qra, qra2, qr1, qr2, cra, cra2, cr1, cr2)
+    qc = QuantumCircuit(qraS, qraB, qr1, craS, craB, cr1)
     #qc = QuantumCircuit(qra, qr1, qr2, cra, cr1, cr2)
 
     # Preparing the initial conditions
@@ -295,9 +317,9 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     x = np.linspace(0, d, N, endpoint=False)
     y = np.exp(-20 * (x - d / 3) ** 2)  # Gaussian initial conditions
     y = y / np.linalg.norm(y)  # normalized to be a unit vector
-    qc.prepare_state(Statevector(y), qr2)
+    qc.prepare_state(Statevector(y), qr1)
 
-    U = Block_encoding(n, dt, c)  # Block encoding circuit
+    U = Another_block_encoding(n, dt, c)  # Block encoding circuit
 
     U.draw(output='latex', filename='block.pdf')
 
@@ -307,42 +329,41 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.2, M_step=deg)  # Extracting the angle sequence
 
     # Applying the QSVT circuit
-    qc.h(qra[:])
+    qc.h(qraS[:])
     s = 0
     for k in range(len(Phi_cos) - 1, -1, -1):
-        qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
-        qc.crz(2 * Phi_cos[k], qra[1], qra[0], ctrl_state="0")
-        qc.crz(2 * Phi_sin[k+1], qra[1], qra[0], ctrl_state="1")
-        qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
+        qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+        qc.crz(2 * Phi_cos[k], qraS[0], qraS[1], ctrl_state="0")
+        qc.crz(2 * Phi_sin[k+1], qraS[0], qraS[1], ctrl_state="1")
+        qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
 
         if s == 0:
-            qc.append(U, qra2[:] + qr1[:] + qr2[:])
+            qc.append(U, qraB[:] + qr1[:])
             #qc.append(U, qr1[:] + qr2[:])
             s = 1
         else:
             if k != 0:
-                qc.append(U.inverse(), qra2[:] + qr1[:] + qr2[:])
+                qc.append(U.inverse(), qraB[:] + qr1[:])
                 #qc.append(U.inverse(), qr1[:] + qr2[:])
                 s = 0
             else:
-                qc.append(U.control(1), qra[0:1] + qra2[:] + qr1[:] + qr2[:])
+                qc.append(U.control(1), qraS[0:1] + qraB[:] + qr1[:])
                 #qc.append(U.control(1), qra[0:1] + qr1[:] + qr2[:])
 
     
-    qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
-    qc.crz(2 * Phi_sin[0], qra[0], qra[1], ctrl_state="1")
-    qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
+    qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+    qc.crz(2 * Phi_sin[0], qraS[0], qraS[1], ctrl_state="1")
+    qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
 
-    qc.p(-np.pi / 2, qra[0])
-    qc.h(qra[:])
+    qc.p(-np.pi / 2, qraS[0])
+    qc.h(qraS[:])
     
     #qc.draw(output='latex', filename='circuit.pdf')
 
     # Measurements
-    qc.measure(qra, cra)
-    qc.measure(qra2, cra2)
+    qc.measure(qraS, craS)
+    qc.measure(qraB, craB)
     qc.measure(qr1, cr1)
-    qc.measure(qr2, cr2)
 
     # Running the circuit
     sim = AerSimulator()
@@ -368,13 +389,13 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
         print("Circuit depth after transpiling:", qc_comp.depth())
 
     # Postselection
-    select = (n + 4) * "0"
+    select = (3 + 2) * "0"
     total = 0  # Tracks the number of successfull outcomes
     z = np.zeros(N)  # The results are encoded in z
     for key in counts:
         L = key.split()
-        if L[1] + L[2] + L[3] == select:
-            print(L)
+        if L[1] + L[2] == select:
+            #print(L)
             z[int(L[0], 2)] = np.sqrt(counts[key] / shots)  # By construction all amplitudes are positive real numbers
             total += counts[key]  # so this actually recovers them!
     success_rate = total / shots
@@ -416,27 +437,27 @@ def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
     x, y, w = Euler_advection(deg, n, dt, c)
     x, z = Advection_QSVT(deg, 10, n, dt, c, shots=shots, show_gate_count=True)
     T = deg * dt
-    plt.plot(x, y, x, w, x, z)
+    plt.plot(x, y, x, w, x, z*18.7)
     plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
-    #plt.legend(["Classical T=0", "Classical T=" + str(T)])
+    #plt.savefig('plot.png')
     plt.show()
 
 def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
  
-    U = Block_encoding(n,dt,c)                       # Block encoding circuit 
-    #U.draw(output='latex', filename='circuit.pdf')
+    U = Another_block_encoding(n,dt,c)                       # Block encoding circuit 
+    U.decompose("Shift").draw(output='latex', filename='block.pdf')
      
     u = np.zeros(2**n).astype(complex)
     for j in range(2**n):
-        b = (n+2)*'0' + f"{j:0{n}b}"#[::-1]
+        b = 3*'0' + f"{j:0{n}b}"#[::-1]
         state = Statevector.from_label(b).evolve(U).reverse_qargs()
         for i in range(0,2**n):
-            index = i*2**(n+2)
+            index = i*2**(3)
             u[i] = np.round(state[index], decimals=3)
             #print(index)
         print(u)
-        stateM = np.round(np.real(state), decimals=3)
+        #stateM = np.round(state, decimals=3)
         #print(stateM)
 
-#Compare_plots(deg = 10, n = 6, dt = 0.05, c = 0.6, shots = 10**6)
-Visualize_matrix(n = 3, dt = 0.05, c = 0.8)
+Compare_plots(deg = 10, n = 6, dt = 0.05, c = 0.95, shots = 10**6)
+#Visualize_matrix(n = 3, dt = 0.05, c = 0.8)

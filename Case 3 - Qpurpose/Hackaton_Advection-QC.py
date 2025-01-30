@@ -8,7 +8,7 @@ from qiskit_aer import AerSimulator
 from pyqsp import angle_sequence, response
 from pyqsp.poly import polynomial_generators, PolyTaylorSeries
 import scipy as sp
-from pennylane.templates.state_preparations.mottonen import compute_theta, gray_code
+#from pennylane.templates.state_preparations.mottonen import compute_theta, gray_code
 
 # The block encoding is built from three special gates: shift, a special 2 qubit gate prep and a modular adder
 
@@ -91,7 +91,7 @@ def Advection_prep(n, dt, c):
     d = 4  # The domain is fixed to be [0,4]
     dx = d / 2**n
     # a = 1-2*dt*nu/dx**2
-    b = 1 - dt * c / dx
+    b = dt * c / dx
     if b > 0:
         suptheta = np.arccos(np.sqrt(b) - 1)  # The rotation angle needed to prepare a using an RY gate
         diatheta = 0  # np.arccos(np.sqrt(a)) + np.pi   # The rotation angle needed to prepare a using an RY gate
@@ -101,7 +101,7 @@ def Advection_prep(n, dt, c):
         exit(1)
 
     sup = RYGate(-suptheta).control(2, ctrl_state="00")
-    dia = RYGate(diatheta).control(2, ctrl_state="01")
+    dia = RYGate(0).control(2, ctrl_state="01")
     sub = RYGate(subtheta).control(2, ctrl_state="10")
 
     # qc.ry(suptheta, last-1)
@@ -178,51 +178,50 @@ def advection_block_encoding(n, dt, c):
 
     return qc
 
+def Block_encoding(n, dt, c):
+    """
+    n : number of spatial qubits
+    dt : timestep
+    c : advection coefficent.
 
-# def advection_block_encoding(n, dt, c):
-#     """
-#     n : number of spatial qubits
-#     dt : timestep
-#     c : advection coefficent.
+    """
+    # Setting up the circuit
+    anc = QuantumRegister(2, name="anc")
+    qr1 = QuantumRegister(n, name="Q1")
+    qr2 = QuantumRegister(n, name="Q2")
+    qc = QuantumCircuit(anc, qr1, qr2, name="U_diff")
 
-#     """
-#     # Setting up the circuit
-#     anc = QuantumRegister(2, name="anc")
-#     qr1 = QuantumRegister(n, name="Q1")
-#     qr2 = QuantumRegister(n, name="Q2")
-#     qc = QuantumCircuit(anc, qr1, qr2, name="U_diff")
+    # Preparing the needed gates
+    [sup, dia, sub] = Advection_prep(n, dt, c)
+    S = Shift_gate(n)
+    adder = ModularAdderGate(n)
 
-#     # Preparing the needed gates
-#     [sup, dia, sub] = Advection_prep(n, dt, c)
-#     S = Shift_gate(n)
-#     adder = ModularAdderGate(n)
+    # Constructing the circuit
+    # Hadamard the shit out of it
+    for j in range(1, n):
+        qc.h(qr1[j])
 
-#     # Constructing the circuit
-#     # Hadamard the shit out of it
-#     for j in range(1, n):
-#         qc.h(qr1[j])
+    qc.append(sup, qr1[0:2] + anc[0:1])
+    qc.append(dia, qr1[0:2] + anc[0:1])
+    qc.append(sub, qr1[0:2] + anc[0:1])
+    qc.append(S.inverse(), qr1[:])
+    qc.append(adder, qr2[:] + qr1[:])
 
-#     qc.append(sup, qr2[1:3] + anc[0:1])
-#     qc.append(dia, qr2[1:3] + anc[0:1])
-#     qc.append(sub, qr2[1:3] + anc[0:1])
-#     qc.append(S.inverse(), qr1[:])
-#     qc.append(adder, qr2[:] + qr1[:])
+    for j in range(n):
+        qc.swap(qr1[j], qr2[j])
 
-#     for j in range(n):
-#         qc.swap(qr1[j], qr2[j])
+    qc.swap(anc[0], anc[1])
 
-#     qc.swap(anc[0], anc[1])
+    qc.append(adder.inverse(), qr2[:] + qr1[:])
+    qc.append(S, qr1[:])
+    qc.append(sub.inverse(), qr1[0:2] + anc[0:1])
+    qc.append(dia.inverse(), qr1[0:2] + anc[0:1])
+    qc.append(sup.inverse(), qr1[0:2] + anc[0:1])
 
-#     qc.append(adder.inverse(), qr2[:] + qr1[:])
-#     qc.append(S, qr1[:])
-#     qc.append(sub.inverse(), qr2[1:3] + anc[0:1])
-#     qc.append(dia.inverse(), qr2[1:3] + anc[0:1])
-#     qc.append(sup.inverse(), qr2[1:3] + anc[0:1])
+    for j in range(1, n):
+        qc.h(qr1[j])
 
-#     for j in range(1, n):
-#         qc.h(qr1[j])
-
-#     return qc
+    return qc
 
 
 # The following function extracts QSVT angle sequences from the file 'QSP_angles.txt'
@@ -276,14 +275,17 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     """
     # Setting up the circuit
     qra = QuantumRegister(2)  # Ancilla register on 1 qubit used in QSVT
+    qra2 = QuantumRegister(2)  # Ancilla register on 1 qubit used in Block_encoding
     qr1 = QuantumRegister(n)  # qr1 and qr2 are the same as in Block_encoding
     qr2 = QuantumRegister(n)
 
     cra = ClassicalRegister(2)
+    cra2 = ClassicalRegister(2)
     cr1 = ClassicalRegister(n)
     cr2 = ClassicalRegister(n)
 
-    qc = QuantumCircuit(qra, qr1, qr2, cra, cr1, cr2)
+    qc = QuantumCircuit(qra, qra2, qr1, qr2, cra, cra2, cr1, cr2)
+    #qc = QuantumCircuit(qra, qr1, qr2, cra, cr1, cr2)
 
     # Preparing the initial conditions
     N = 2**n
@@ -294,41 +296,50 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     y = y / np.linalg.norm(y)  # normalized to be a unit vector
     qc.prepare_state(Statevector(y), qr2)
 
-    U = advection_block_encoding(n, dt, c)  # Block encoding circuit
+    U = Block_encoding(n, dt, c)  # Block encoding circuit
 
-    # U.draw(output='latex', filename='circuit.pdf')
+    U.draw(output='latex', filename='block.pdf')
 
     # TODO Set maxscale such that the output is rescaled
     # TODO
-    Phi_cos = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=1, M_step=deg)  # Extracting the angle sequence
-    Phi_sin = QSVT_sinus(degree_cutoff=taylor_cutoff + 1, max_scale=1, M_step=deg)  # Extracting the angle sequence
+    (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.1, M_step=deg)  # Extracting the angle sequence
+    (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.1, M_step=deg)  # Extracting the angle sequence
 
     # Applying the QSVT circuit
     qc.h(qra[:])
     s = 0
-    for k in range(len(taylor_cutoff) - 1, -1, -1):
+    for k in range(len(Phi_cos) - 1, -1, -1):
         qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
-        qc.crz(2 * Phi_cos[-k], qra[1], qra[0], control_state="0")
-        qc.crz(2 * Phi_sin[-k], qra[1], qra[0], control_state="1")
+        qc.crz(2 * Phi_cos[k], qra[1], qra[0], ctrl_state="0")
+        qc.crz(2 * Phi_sin[k+1], qra[1], qra[0], ctrl_state="1")
         qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
 
         if s == 0:
-            qc.append(U, qr1[:] + qr2[:])
+            qc.append(U, qra2[:] + qr1[:] + qr2[:])
+            #qc.append(U, qr1[:] + qr2[:])
             s = 1
         else:
-            qc.append(U.inverse(), qr1[:] + qr2[:])
-            s = 0
+            if k != 0:
+                qc.append(U.inverse(), qra2[:] + qr1[:] + qr2[:])
+                #qc.append(U.inverse(), qr1[:] + qr2[:])
+                s = 0
+            else:
+                qc.append(U.control(1), qra[0:1] + qra2[:] + qr1[:] + qr2[:])
+                #qc.append(U.control(1), qra[0:1] + qr1[:] + qr2[:])
 
+    
     qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
-    qc.crz(2 * Phi_cos[0], qra[1], qra[0], control_state="0")
+    qc.crz(2 * Phi_sin[0], qra[0], qra[1], ctrl_state="1")
     qc.mcx(qr1[:], qra[0], ctrl_state=n * "0")
 
-    qc.p(qra[1], -np.pi / 2)
-    qc.h(qra[1])
-    qc.h(qra[0])
+    qc.p(-np.pi / 2, qra[0])
+    qc.h(qra[:])
+    
+    qc.draw(output='latex', filename='circuit.pdf')
 
     # Measurements
     qc.measure(qra, cra)
+    qc.measure(qra2, cra2)
     qc.measure(qr1, cr1)
     qc.measure(qr2, cr2)
 
@@ -356,12 +367,13 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
         print("Circuit depth after transpiling:", qc_comp.depth())
 
     # Postselection
-    select = (n + 1) * "0"
+    select = (n + 4) * "0"
     total = 0  # Tracks the number of successfull outcomes
     z = np.zeros(N)  # The results are encoded in z
     for key in counts:
         L = key.split()
-        if L[1] + L[2] == select:
+        if L[1] + L[2] + L[3] == select:
+            print(L)
             z[int(L[0], 2)] = np.sqrt(counts[key] / shots)  # By construction all amplitudes are positive real numbers
             total += counts[key]  # so this actually recovers them!
     success_rate = total / shots
@@ -401,14 +413,14 @@ def Euler_advection(deg, n, dt, c):
 def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
     # Plots the initial distribution and the results of the classical and quantum simulations at t = deg*dt
     x, y, w = Euler_advection(deg, n, dt, c)
-    # x, z = Diffusion_QSVT(deg, n, dt, c, shots=shots, show_gate_count=True)
+    x, z = Advection_QSVT(deg, 10, n, dt, c, shots=shots, show_gate_count=True)
     T = deg * dt
-    plt.plot(x, y, x, w)
+    plt.plot(x, y, x, w, x, z)
     # plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
     plt.legend(["Classical T=0", "Classical T=" + str(T)])
     plt.show()
 
 
-# Compare_plots(deg=50, n=6, dt=0.05, c=0.02, shots=10**6)
-qc = advection_block_encoding(2, 1, 1)
-print(qc.draw())
+Compare_plots(deg=50, n=6, dt=0.05, c=0.2, shots=10**6)
+#qc = advection_block_encoding(2, 1, 1)
+#print(qc.draw())

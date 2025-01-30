@@ -144,7 +144,7 @@ def advection_block_encoding(n, dt, c):
     return qc
 
 
-def Advection_prep(n, dt, c):
+def Advection_prep(n, dt, c, nu):
     """
     n: number of spatial qubits. N = 2**n is the number of spatial grid points.
     dt: time step.
@@ -155,7 +155,6 @@ def Advection_prep(n, dt, c):
     """
     d = 4  # The domain is fixed to be [0,4]
     dx = d / 2**n
-    nu = 0.02
     a = 1-2*dt*nu/dx**2
     b = dt * c / dx
     if b > 0:
@@ -166,8 +165,8 @@ def Advection_prep(n, dt, c):
         print("The chosen values n,dt,c are not admissible. Arrange that 1>c*dt/dx")
         exit(1)
 
-    dia = RYGate(0).control(2, ctrl_state="00")
-    sup = RYGate(suptheta).control(2, ctrl_state="01")
+    sup = RYGate(suptheta).control(2, ctrl_state="00")
+    dia = RYGate(diatheta).control(2, ctrl_state="01")
     sub = RYGate(subtheta).control(2, ctrl_state="10")
 
     # qc.ry(suptheta, last-1)
@@ -178,12 +177,12 @@ def Advection_prep(n, dt, c):
     # qc.cx(1, last-1)
     return [sup, dia, sub]
 
-def Another_block_encoding(n, dt, c):
+def Another_block_encoding(n, dt, c, nu):
     anc = QuantumRegister(3, name="anc")
     qr1 = QuantumRegister(n, name="Q1")
     qc = QuantumCircuit(anc, qr1, name="Block-2")
     
-    [sup, dia, sub] = Advection_prep(n, dt, c)
+    [sup, dia, sub] = Advection_prep(n, dt, c, nu)
     
     qc.h(anc[1:])
     qc.append(sup, anc[1:] + anc[0:1])
@@ -282,7 +281,7 @@ def Initialize(n):
     y = y / np.linalg.norm(y)  # normalized to be a unit vector
     return x, y
 
-def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float):
+def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, nu: float, y: list[int] | None):
     """
     deg: number of time steps
     taylor_cutoff: the degree of the Taylor series used in the QSVT algorithm for the cosinus
@@ -322,10 +321,11 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float):
     #qc = QuantumCircuit(qra, qr1, qr2, cra, cr1, cr2)
 
     # Preparing the initial conditions
-    _, y = Initialize(n)
+    if y is None:
+        _, y = Initialize(n)
     qc.prepare_state(Statevector(y), qr1)
 
-    U = Another_block_encoding(n, dt, c)  # Block encoding circuit
+    U = Another_block_encoding(n, dt, c, nu)  # Block encoding circuit
     #U.draw(output='latex', filename='block.pdf')
 
     (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.5, M_step=deg)  # Extracting the angle sequence
@@ -476,12 +476,15 @@ def Euler_advection(deg, n, dt, c):
     return x, y, w
 
 
-def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
+def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, nu=0.05, shots=10**6, iter=10):
     # Plots the initial distribution and the results of the classical and quantum simulations at t = deg*dt
-    x, y, w = Euler_advection(deg, n, dt, c)
-    qc = Advection_QSVT(deg, 10, n, dt, c)
-    x, z = Simulator(n, qc, shots=shots, show_gate_count=False)
+    z = None
+    for k in range(iter):
+        qc = Advection_QSVT(deg, 6, n, dt, c, nu, z)
+        x, z = Simulator(n, qc, shots=shots, show_gate_count=False)
+    
     T = deg * dt
+    x, y, w = Euler_advection(iter*deg, n, dt, c)
     plt.plot(x, y, x, w, x, z)
     plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
     #plt.savefig('plot.png')
@@ -504,5 +507,5 @@ def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
         #stateM = np.round(state, decimals=3)
         #print(stateM)
 
-Compare_plots(deg = 7, n = 6, dt = 0.05, c = 0.99, shots = 10**6)
+Compare_plots(deg = 1, n = 6, dt = 0.06, c = 0.99, nu=0, shots = 10**6, iter=7)
 #Visualize_matrix(n = 3, dt = 0.05, c = 0.8)

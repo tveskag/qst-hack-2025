@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
 from qiskit.circuit.library import QFT, RYGate, RZGate, MCXGate, ModularAdderGate
 from qiskit.visualization import plot_histogram
-from qiskit.quantum_info import Statevector
+from qiskit.quantum_info import Statevector, partial_trace
 from qiskit_aer import AerSimulator
 from pyqsp import angle_sequence, response
 from pyqsp.poly import polynomial_generators, PolyTaylorSeries
@@ -420,7 +420,22 @@ def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
     plt.legend(["Classical T=0", "Classical T=" + str(T)])
     plt.show()
 
+def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
+ 
+    U = Block_encoding(n,dt,c)                       # Block encoding circuit 
+    U.draw(output='latex', filename='circuit.pdf')
+     
+    u = np.zeros(2**n)
+    for j in range(2**n):
+        b = (n+2)*'0' + f"{j:0{n}b}"#[::-1]
+        state = Statevector.from_label(b).evolve(U).reverse_qargs()
+        for i in range(0,2**n):
+            index = (i+1)*2**(n+1) + (j+1)*2**(n+1) - 1
+            u[i] = np.round(np.real(state[index]), decimals=3)
+            #print(index)
+        print(u)
+        stateM = np.round(np.real(state), decimals=3)
+        #print(stateM)
 
-Compare_plots(deg=50, n=6, dt=0.05, c=0.2, shots=10**6)
-#qc = advection_block_encoding(2, 1, 1)
-#print(qc.draw())
+#Compare_plots(deg = 10,n = 6,dt = 0.05,c = 0.02, shots = 10**6)
+Visualize_matrix(n = 2, dt = 0.05, c = 0.8)

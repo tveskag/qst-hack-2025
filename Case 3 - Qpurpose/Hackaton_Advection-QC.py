@@ -272,8 +272,17 @@ def extract_angle_seq(file="QSP_angles.txt"):
 # The full circuit is then simulated with the aer-simulator using Gaussian initial conditions.
 # A post-selection procedure picks out the successfull runs and arranges the results in a vector
 
+def Initialize(n):
+    # Preparing the initial conditions
+    N = 2**n
+    d = 4  # spatial domain [0,d]
+    dx = 4 / N
+    x = np.linspace(0, d, N, endpoint=False)
+    y = np.exp(-20 * (x - d / 3) ** 2)  # Gaussian initial conditions
+    y = y / np.linalg.norm(y)  # normalized to be a unit vector
+    return x, y
 
-def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, shots=10**4, show_gate_count=False):
+def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float):
     """
     deg: number of time steps
     taylor_cutoff: the degree of the Taylor series used in the QSVT algorithm for the cosinus
@@ -297,74 +306,106 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
     Returns x,z the spatial grid values and the simulated y values in z.
     """
     # Setting up the circuit
+    qraO = QuantumRegister(1)  # Ancilla register on 1 qubit used in OAA
     qraS = QuantumRegister(2)  # Ancilla register on 1 qubit used in QSVT
     qraB = QuantumRegister(3)  # Ancilla register on 1 qubit used in Block_encoding
     qr1 = QuantumRegister(n)  # qr1 and qr2 are the same as in Block_encoding
     #qr2 = QuantumRegister(n)
 
+    craO = ClassicalRegister(1)
     craS = ClassicalRegister(2)
     craB = ClassicalRegister(3)
     cr1 = ClassicalRegister(n)
     #cr2 = ClassicalRegister(n)
 
-    qc = QuantumCircuit(qraS, qraB, qr1, craS, craB, cr1)
+    qc = QuantumCircuit(qraO, qraS, qraB, qr1, craO, craS, craB, cr1)
     #qc = QuantumCircuit(qra, qr1, qr2, cra, cr1, cr2)
 
     # Preparing the initial conditions
-    N = 2**n
-    d = 4  # spatial domain [0,d]
-    dx = 4 / N
-    x = np.linspace(0, d, N, endpoint=False)
-    y = np.exp(-20 * (x - d / 3) ** 2)  # Gaussian initial conditions
-    y = y / np.linalg.norm(y)  # normalized to be a unit vector
+    _, y = Initialize(n)
     qc.prepare_state(Statevector(y), qr1)
 
     U = Another_block_encoding(n, dt, c)  # Block encoding circuit
+    #U.draw(output='latex', filename='block.pdf')
 
-    U.draw(output='latex', filename='block.pdf')
+    (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.5, M_step=deg)  # Extracting the angle sequence
+    (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.5, M_step=deg)  # Extracting the angle sequence
 
-    # TODO Set maxscale such that the output is rescaled
-    # TODO
-    (Phi_cos,_) = QSVT_cosinus(degree_cutoff=taylor_cutoff, max_scale=0.2, M_step=deg)  # Extracting the angle sequence
-    (Phi_sin,_) = QSVT_sinus(degree_cutoff=taylor_cutoff + 2, max_scale=0.2, M_step=deg)  # Extracting the angle sequence
+    def QSVT():
+        # Applying the QSVT circuit
+        qraS = QuantumRegister(2)  # Ancilla register on 1 qubit used in QSVT
+        qraB = QuantumRegister(3)  # Ancilla register on 1 qubit used in Block_encoding
+        qr1 = QuantumRegister(n)  # qr1 and qr2 are the same as in Block_encoding
 
-    # Applying the QSVT circuit
-    qc.h(qraS[:])
-    s = 0
-    for k in range(len(Phi_cos) - 1, -1, -1):
-        qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
-        qc.crz(2 * Phi_cos[k], qraS[0], qraS[1], ctrl_state="0")
-        qc.crz(2 * Phi_sin[k+1], qraS[0], qraS[1], ctrl_state="1")
-        qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+        qcCop = QuantumCircuit(qraS, qraB, qr1)
+        
+        qcCop.h(qraS[:])
+        s = 0
+        for k in range(len(Phi_cos) - 1, -1, -1):
+            qcCop.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+            qcCop.crz(2 * Phi_cos[k], qraS[0], qraS[1], ctrl_state="0")
+            qcCop.crz(2 * Phi_sin[k+1], qraS[0], qraS[1], ctrl_state="1")
+            qcCop.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
 
-        if s == 0:
-            qc.append(U, qraB[:] + qr1[:])
-            #qc.append(U, qr1[:] + qr2[:])
-            s = 1
-        else:
-            if k != 0:
-                qc.append(U.inverse(), qraB[:] + qr1[:])
-                #qc.append(U.inverse(), qr1[:] + qr2[:])
-                s = 0
+            if s == 0:
+                qcCop.append(U, qraB[:] + qr1[:])
+                s = 1
             else:
-                qc.append(U.control(1), qraS[0:1] + qraB[:] + qr1[:])
-                #qc.append(U.control(1), qra[0:1] + qr1[:] + qr2[:])
+                if k != 0:
+                    qcCop.append(U.inverse(), qraB[:] + qr1[:])
+                    s = 0
+                else:
+                    qcCop.append(U.control(1), qraS[0:1] + qraB[:] + qr1[:])
 
     
-    qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
-    qc.crz(2 * Phi_sin[0], qraS[0], qraS[1], ctrl_state="1")
-    qc.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+        qcCop.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
+        qcCop.crz(2 * Phi_sin[0], qraS[0], qraS[1], ctrl_state="1")
+        qcCop.mcx(qraB[:], qraS[1], ctrl_state=3 * "0")
 
-    qc.p(-np.pi / 2, qraS[0])
-    qc.h(qraS[:])
+        qcCop.p(-np.pi / 2, qraS[0])
+        qcCop.h(qraS[:])
+        
+        return qcCop
+
+    qsvt = QSVT()
     
-    #qc.draw(output='latex', filename='circuit.pdf')
+    OOAngles = [-np.pi*3/2, np.pi/2, np.pi/2, np.pi/2]
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    qc.rz(2 * OOAngles[3], qraO[0])
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
 
+    qc.append(qsvt, qraS[:] + qraB[:] + qr1[:])
+    
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    qc.rz(2 * OOAngles[2], qraO[0])
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    
+    qc.append(qsvt.inverse(), qraS[:] + qraB[:] + qr1[:])
+    
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    qc.rz(2 * OOAngles[1], qraO[0])
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    
+    qc.append(qsvt, qraS[:] + qraB[:] + qr1[:])
+    
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+    qc.rz(2 * OOAngles[0], qraO[0])
+    qc.mcx(qraS[:] + qraB[:] + qr1[:], qraO[0], ctrl_state=(n+2+3) * "0")
+
+    qc.x(qraO[0])
+    qc.z(qraO[0])
+    qc.x(qraO[0])
+    
     # Measurements
+    qc.measure(qraO, craO)
     qc.measure(qraS, craS)
     qc.measure(qraB, craB)
     qc.measure(qr1, cr1)
-
+    
+    qc.draw(output='latex', filename='circuit.pdf')
+    return qc
+  
+def Simulator(n, qc, shots=10**4, show_gate_count=False):
     # Running the circuit
     sim = AerSimulator()
     qc_comp = transpile(qc, sim)
@@ -389,19 +430,22 @@ def Advection_QSVT(deg: int, taylor_cutoff: int, n: int, dt: float, c: float, sh
         print("Circuit depth after transpiling:", qc_comp.depth())
 
     # Postselection
-    select = (3 + 2) * "0"
+    select = (3 + 3) * "0"
     total = 0  # Tracks the number of successfull outcomes
-    z = np.zeros(N)  # The results are encoded in z
+    z = np.zeros(2**n)  # The results are encoded in z
     for key in counts:
         L = key.split()
-        if L[1] + L[2] == select:
-            #print(L)
+        if L[1] + L[2] + L[3] != select:
+            shots -= counts[key]  # By construction all amplitudes are positive real numbers
+    for key in counts:
+        L = key.split()
+        if L[1] + L[2] + L[3] == select:
             z[int(L[0], 2)] = np.sqrt(counts[key] / shots)  # By construction all amplitudes are positive real numbers
             total += counts[key]  # so this actually recovers them!
     success_rate = total / shots
     print("Success rate =", success_rate)
+    x, _ = Initialize(n)
     return x, z
-
 
 def Euler_advection(deg, n, dt, c):
     """
@@ -435,9 +479,10 @@ def Euler_advection(deg, n, dt, c):
 def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
     # Plots the initial distribution and the results of the classical and quantum simulations at t = deg*dt
     x, y, w = Euler_advection(deg, n, dt, c)
-    x, z = Advection_QSVT(deg, 10, n, dt, c, shots=shots, show_gate_count=True)
+    qc = Advection_QSVT(deg, 10, n, dt, c)
+    x, z = Simulator(n, qc, shots=shots, show_gate_count=False)
     T = deg * dt
-    plt.plot(x, y, x, w, x, z*18.7)
+    plt.plot(x, y, x, w, x, z)
     plt.legend(["Classical T=0", "Classical T=" + str(T), "Quantum T=" + str(T)])
     #plt.savefig('plot.png')
     plt.show()
@@ -445,7 +490,7 @@ def Compare_plots(deg=10, n=5, dt=0.1, c=0.02, shots=10**6):
 def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
  
     U = Another_block_encoding(n,dt,c)                       # Block encoding circuit 
-    U.decompose("Shift").draw(output='latex', filename='block.pdf')
+    #U.decompose("Shift").draw(output='latex', filename='block.pdf')
      
     u = np.zeros(2**n).astype(complex)
     for j in range(2**n):
@@ -459,5 +504,5 @@ def Visualize_matrix(n = 5, dt = 0.1, c = 0.02):
         #stateM = np.round(state, decimals=3)
         #print(stateM)
 
-Compare_plots(deg = 10, n = 6, dt = 0.05, c = 0.95, shots = 10**6)
+Compare_plots(deg = 7, n = 6, dt = 0.05, c = 0.99, shots = 10**6)
 #Visualize_matrix(n = 3, dt = 0.05, c = 0.8)
